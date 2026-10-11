@@ -67,6 +67,10 @@ sealed class InspectorPanel
 
         Root = Controls.Panel("Tile", out _title);
 
+        Root.Add(Controls.Push("Copy", _editor.CopySelection));
+        Root.Add(Controls.Push("Paste", () => _editor.PasteSelection()));
+        Root.Add(Controls.Push("Fold / Unfold", () => _editor.View.ToggleStack()));
+
         _body = new VisualElement();
         Root.Add(_body);
 

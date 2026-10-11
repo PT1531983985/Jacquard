@@ -135,6 +135,20 @@ public sealed class ScoreEditor
     {
         if (Locked) return;
 
+        if (View.Selection.Count > 0)
+        {
+            // Locate again after each removal: stacks close upwards and deleting
+            // a jump may remove another selected tile with its branch lane.
+            foreach (var tile in new List<Tile>(View.Selection))
+            {
+                var point = Score.Locate(tile);
+                if (point.HasValue) Score.Remove(point.Value);
+            }
+            View.ClearSelection();
+            Commit();
+            return;
+        }
+
         var cell = Cell;
 
         // Deleting a lane's head is how a lane is removed, which also takes any
@@ -201,6 +215,7 @@ public sealed class ScoreEditor
 
     public void CopyStack()
     {
+        _groupCopy = false;
         _copiedCells.Clear();
 
         var copies = Score.CopyStack(View.Cursor, _copiedCells);
@@ -214,9 +229,9 @@ public sealed class ScoreEditor
         View.Flash(_copiedCells);
     }
 
-    public void PasteStack()
+    public bool PasteStack()
     {
-        if (Locked || _copied == null || !CanPlace) return;
+        if (Locked || _copied == null || !CanPlace) return false;
 
         // Copied again on the way out as well as on the way in: what is held has to
         // be untouched by an edit of the tiles it came from, and two pastes have to
@@ -226,7 +241,7 @@ public sealed class ScoreEditor
 
         var point = View.Cursor;
         var lane = Score.PlacementLane(point, out var step, out _);
-        if (!Score.PlaceStack(point, tiles)) return;
+        if (!Score.PlaceStack(point, tiles)) return false;
 
         Commit();
 
@@ -238,10 +253,39 @@ public sealed class ScoreEditor
         // A step is one instant, so the notes in a stack are a chord and are
         // previewed as one.
         foreach (var tile in tiles) if (tile is NoteTile note) Preview(note.Note);
+        return true;
     }
 
     List<Tile> _copied;
     readonly List<GridPoint> _copiedCells = new();
+    readonly TileClipboard _groupClipboard = new();
+    bool _groupCopy;
+
+    public void CopySelection()
+    {
+        _groupCopy = View.Selection.Count > 0;
+        if (!_groupCopy) { CopyStack(); return; }
+        _groupClipboard.Copy(Score, View.Selection);
+        var cells = new List<GridPoint>();
+        foreach (var tile in View.Selection)
+        {
+            var point = Score.Locate(tile);
+            if (point.HasValue) cells.Add(point.Value);
+        }
+        View.Flash(cells);
+    }
+
+    public bool PasteSelection()
+    {
+        if (Locked) return false;
+        if (!_groupCopy) return PasteStack();
+        var pasted = new List<Tile>();
+        if (!_groupClipboard.Paste(Score, View.Cursor, pasted)) return false;
+        View.ClearSelection();
+        foreach (var tile in pasted) View.Selection.Add(tile);
+        Commit();
+        return true;
+    }
 
     // Notes
 
@@ -434,6 +478,31 @@ public sealed class ScoreEditor
         // settled before this is asked and go on working.
         if (Locked) return false;
 
+        if (evt.ctrlKey || evt.commandKey)
+        {
+            switch (evt.keyCode)
+            {
+                case KeyCode.A: View.SelectAll(); return true;
+                case KeyCode.C: CopySelection(); return true;
+                case KeyCode.V: PasteSelection(); return true;
+            }
+        }
+        if (evt.keyCode == KeyCode.Escape) { View.ClearSelection(); return true; }
+        if (evt.keyCode == KeyCode.Tab) { View.ToggleStack(); return true; }
+        if (evt.shiftKey && (evt.keyCode == KeyCode.LeftArrow ||
+            evt.keyCode == KeyCode.RightArrow || evt.keyCode == KeyCode.UpArrow ||
+            evt.keyCode == KeyCode.DownArrow))
+        {
+            _keyAnchor ??= View.Cursor;
+            View.MoveCursor(evt.keyCode == KeyCode.LeftArrow ? -1 :
+                            evt.keyCode == KeyCode.RightArrow ? 1 : 0,
+                            evt.keyCode == KeyCode.UpArrow ? -1 :
+                            evt.keyCode == KeyCode.DownArrow ? 1 : 0);
+            View.SelectRectangle(_keyAnchor.Value, View.Cursor);
+            return true;
+        }
+        _keyAnchor = null;
+
         switch (evt.keyCode)
         {
             case KeyCode.LeftArrow: View.MoveCursor(-1, 0); return true;
@@ -456,6 +525,7 @@ public sealed class ScoreEditor
 
         return false;
     }
+    GridPoint? _keyAnchor;
 }
 
 } // namespace Jacquard.App
