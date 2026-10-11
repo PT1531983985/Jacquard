@@ -89,6 +89,11 @@ public sealed class ControlBridge : IDisposable
                     text.Append((char)c);
                 }
                 if (c == -1) continue;
+                if (_queue.Count >= 32)
+                {
+                    writer.WriteLine("{\"ok\":false,\"message\":\"Control queue is full\"}");
+                    continue;
+                }
                 var pending = new Pending { Text = text.ToString() };
                 _queue.Enqueue(pending);
                 lock (pending.Gate)

@@ -24,7 +24,7 @@ while (await Console.In.ReadLineAsync() is { } line)
                 throw new RpcException(-32600, "Invalid request id");
             id = requestId.Clone();
         }
-        if (!root.TryGetProperty("jsonrpc", out var version) || version.GetString() != "2.0" ||
+        if (!root.TryGetProperty("jsonrpc", out var version) || version.ValueKind != JsonValueKind.String || version.GetString() != "2.0" ||
             !root.TryGetProperty("method", out var method) || method.ValueKind != JsonValueKind.String)
             throw new RpcException(-32600, "Invalid JSON-RPC request");
         var name = method.GetString();

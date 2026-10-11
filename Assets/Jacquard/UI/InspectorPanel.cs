@@ -399,10 +399,8 @@ sealed class InspectorPanel
         //
         // And every name is double clicked to put its parameter back where a fresh patch
         // holds it, which is the same gesture that lets a lock go of its target: a row
-        // taken back to saying nothing of its own. A whole patch cannot be reset in one
-        // parameter reset; the preset buttons above replace the entire sound. A sound is arrived at one parameter at a time, and
-        // the way back from a dead end is the parameter that was last touched rather
-        // than everything that came before it.
+        // taken back to saying nothing of its own. The preset buttons replace the
+        // whole sound; a double click on a parameter still resets just that field.
         for (var target = 0; target < ParamTargets.Count; target++)
         {
             var index = target;

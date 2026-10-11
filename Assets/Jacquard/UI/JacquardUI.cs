@@ -1163,6 +1163,12 @@ sealed class JacquardUI
 
     void OnKey(KeyDownEvent evt)
     {
+        if ((evt.ctrlKey || evt.commandKey) && evt.keyCode == KeyCode.S)
+        {
+            if (!_editor.Locked) _app.Save();
+            evt.StopPropagation();
+            return;
+        }
         if (evt.keyCode == KeyCode.Space || evt.character == ' ')
         {
             if (evt.keyCode == KeyCode.Space) _app.TogglePlay();
