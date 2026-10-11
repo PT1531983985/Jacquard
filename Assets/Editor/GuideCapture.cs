@@ -224,9 +224,8 @@ static class GuideCapture
         // the chooser around a name set from outside it, and it is internal -- the same
         // reflection ShotCapture reaches a Clickable with, and for the same reason: there
         // is no public way in and the alternative is a picture that names the wrong file.
-        app.Store.Name = ScoreName;
+        app.OpenTab(ScoreName);
         RefreshSlots(app);
-        app.Load();
 
         foreach (var name in Switches) Want(buttons, name, false);
 

@@ -170,6 +170,7 @@ sealed class JacquardUI
         // After the rebuild, since where the score has come to rest on the plane is
         // what this is aiming at.
         ShowScore();
+        _shownDocument = _app.Documents.Active;
 
         _view.Focus();
 
@@ -203,6 +204,14 @@ sealed class JacquardUI
 
         FollowTheSafeArea();
         FollowTheLock();
+        if (_tabButtons.Count != _slots.Count ||
+            System.Linq.Enumerable.Any(_app.Documents.Open, document => !_slots.Contains(document.Name)))
+            RefreshSlots();
+        if (Time.unscaledTime >= _nextTabRefresh)
+        {
+            _nextTabRefresh = Time.unscaledTime + 0.5f;
+            RefreshTabStatus();
+        }
         FollowTheSubject();
 
         // After the hole has been cut, so a page that turned this frame is painted at its
@@ -218,28 +227,45 @@ sealed class JacquardUI
         Report();
     }
 
-    // Builds the file chooser again from what is in the score folder now. Called when
-    // the app comes back to the front, which is the one moment it can be sure the folder
-    // has been out of its hands — see JacquardApp.ReadTheFolderAgain.
-    //
-    // The list is refilled rather than replaced, since the chooser was handed this list
-    // and holds it: a new one would be a chooser reading the folder as it stood when the
-    // row was built, for as long as the app runs.
-    //
-    // A name that is no longer there is given up. The chooser would show the first slot
-    // anyway — an index it cannot find reads as none — and leaving the store pointed at
-    // the missing file would mean Save and Load working on a name nothing on screen says.
+    // Files that disappear keep their open buffers and original identities.
+    // Redirecting one to the first surviving file was the overwrite hazard.
     public void RefreshSlots()
     {
         _slots.Clear();
         _slots.AddRange(_app.Store.Slots());
-
-        if (_slots.Count > 0 && !_slots.Contains(_app.Store.Name))
-            _app.Store.Name = _slots[0];
-
-        _syncSlots();
+        foreach (var document in _app.Documents.Open)
+            if (!_slots.Contains(document.Name)) _slots.Add(document.Name);
+        _chooser.Clear();
+        _tabButtons.Clear();
+        foreach (var name in _slots)
+        {
+            var tabName = name;
+            var button = Controls.Push(tabName, () => { _app.OpenTab(tabName); Refocus(); });
+            button.style.width = StyleKeyword.Auto;
+            button.style.minWidth = Controls.Width(65);
+            button.tooltip = "Open " + tabName + "; edits stay in their own tab";
+            _chooser.Add(button);
+            _tabButtons.Add(tabName, button);
+        }
+        RefreshTabStatus();
     }
 
+    void RefreshTabStatus()
+    {
+        foreach (var entry in _tabButtons)
+        {
+            var document = _app.Documents.Find(entry.Key);
+            entry.Value.text = entry.Key + (document != null && document.IsDirty ? " *" : "") +
+                (_app.PendingDocument == document && document != null ? " (pending)" : "");
+            Controls.SetActive(entry.Value, document != null && document == _app.Documents.Active);
+            entry.Value.SetEnabled(!_editor.Locked);
+        }
+        if (_save != null)
+        {
+            _save.tooltip = "Save " + _app.Documents.Active.Name;
+            _save.SetEnabled(!_editor.Locked);
+        }
+    }
     // Holds everything that is read or pressed inside the part of the screen the system
     // is not standing on. See SafeArea for what that part is and why it is not a viewport.
     //
@@ -342,7 +368,7 @@ sealed class JacquardUI
         _view.Locked = _locked;
         Controls.SetLocked(_inspector.Root, _locked);
         _channels.SetLocked(_locked);
-        _load.style.opacity = _locked ? Style.DimmedOpacity : 1.0f;
+        RefreshTabStatus();
     }
 
     // Raises the onboarding panel once the fog behind it is all the way down, and drops it
@@ -407,7 +433,7 @@ sealed class JacquardUI
       => page switch
       {
           0 => (_play, (VisualElement)_play),
-          1 => (_chooser, (VisualElement)_load),
+          1 => (_chooser, (VisualElement)_save),
           _ => (_guide, (VisualElement)_guide)
       };
 
@@ -538,67 +564,17 @@ sealed class JacquardUI
 
         row.Add(Separator());
 
-        // The one list on this screen that is not written down anywhere: it is the score
-        // folder, read out. The list object outlives every reading of it, since what the
-        // chooser holds is this list rather than a copy of what was in it — see
-        // RefreshSlots.
-        _slots = _app.Store.Slots();
-
-        _chooser = Controls.Chooser(_slots,
-                                    () => Mathf.Max(0, _slots.IndexOf(_app.Store.Name)),
-                                    index => _app.Store.Name = _slots[index],
-                                    out _syncSlots);
-        // The widest thing on the row, and the first place to look when the row runs
-        // out of screen. What it has to hold is a slot name between two arrows, and a
-        // name longer than the box draws past it rather than being clipped — where a
-        // switch that does not fit is a switch that cannot be pressed. Cut from 190 when
-        // the row grew its fourth and fifth switch, which is what put the touch profile
-        // back inside an iPad mini's 917 units at the time, and from 170 when the
-        // wordmark arrived at the left of the row and had to be paid for from somewhere.
-        //
-        // It is not inside 917 any more, and has not been since the widening below.
-        // Measured in the editor at the touch profile, the row's content comes to 1114
-        // units, so the last of it is reached by dragging the strip on every screen this
-        // ships to rather than on a phone alone — see the note beside the guide button
-        // in this method, which is what stands last on it now. That is a row that has to
-        // be dragged and not a control that cannot be pressed, which is the line this
-        // paragraph is about: a name too long for the box still draws past it, and this
-        // number is still what decides where that line falls.
-        //
-        // The caption is gone rather than narrowed, and the box gives back exactly what
-        // it took: the name between the arrows is as long as it ever was. What the word
-        // said is said by where the box is standing — after the rule, between Save and
-        // Load — and by what is written in it, which is the name of a file.
-        //
-        // Widened again to a name of eight wide characters — "MMMMMMMM", which is the
-        // longest eight letters can measure in this face and so what eight of anything
-        // fits inside. Every other number on this row is cut to a word that is written
-        // here and cannot change; this one is cut to a word somebody else will type, so
-        // it is the one box on the row that has to be sized to a length rather than to
-        // a string.
-        //
-        // Which is why it is the touch profile that sets the number, and by more than
-        // the ratio between the two. What is left for the name is the box less the two
-        // arrows and their gaps, and an arrow is a one-glyph button — the one shape
-        // Width floors at a row's height rather than scaling. So the arrows grow from 22
-        // to 30 while the ratio would only have taken them to 26, and the eight
-        // characters they are standing either side of grow by the ratio: the name is
-        // squeezed from both directions at once. 126 is what leaves eight of them room
-        // there, which leaves seven pixels going spare under a mouse.
-        _chooser.style.width = Controls.Width(126);
-        _chooser.style.marginBottom = 0;
+        // Each button opens its own editing buffer. The displayed document, not
+        // a chooser's next candidate, supplies Save's identity.
+        _slots = new List<string>();
+        _chooser = new VisualElement();
+        _chooser.style.flexDirection = FlexDirection.Row;
+        _chooser.style.flexShrink = 0;
         row.Add(_chooser);
+        RefreshSlots();
 
-        // Named, where it never had to be before, because it is one of the two controls
-        // Stage Mode takes off this row. Its neighbour is not: a set is played out of
-        // more than one score and loading the next one between numbers is part of
-        // playing it, where nothing about playing writes a file. See StageMode.
-        _save = Controls.Push("Save", () => { _app.Save(); Refocus(); }, 46);
+        _save = Controls.Push("Save", () => { _app.Save(); RefreshTabStatus(); Refocus(); }, 46);
         row.Add(_save);
-
-        _load = Controls.Push("Load", () => { _app.Load(); Refocus(); }, 46);
-        row.Add(_load);
-
         // And past the last rule, the one control up here that is not about the piece
         // at all: what everything else on this row does is play it, set it or save it,
         // and this leaves the app. That is the argument that put System last among the
@@ -1001,7 +977,14 @@ sealed class JacquardUI
 
     void OnChanged()
     {
+        var switched = _shownDocument != _app.Documents.Active;
+        if (switched && _shownDocument != null)
+            _documentOffsets[_shownDocument] = _scroll.Requested;
         _view.Rebuild();
+        if (switched)
+        {
+            _shownDocument = _app.Documents.Active;
+        }
         _inspector.Refresh();
         // Not in OnCursorMoved, since nothing on the send panel answers to a cell. This
         // is for the one change that does reach it: a load, which arrives with effect
@@ -1013,6 +996,15 @@ sealed class JacquardUI
         // The Global panel takes a load the same way the send panel does, and for the
         // same reason: what is on it belongs to the project that was just replaced.
         _global.Refresh();
+    }
+
+    // Restore after the cursor, whose reveal request can otherwise move a
+    // viewport that was deliberately panned away from it in another tab.
+    public void RestoreDocumentView()
+    {
+        if (_documentOffsets.TryGetValue(_app.Documents.Active, out var offset))
+            _scroll.Offset = offset;
+        else ShowScore();
     }
 
     // The one panel that shows whatever the cursor is on: the tile, the lane it heads,
@@ -1353,7 +1345,6 @@ sealed class JacquardUI
     Button _systemButton;
     bool _systemShown;
     ValueBar _tempo;
-    Button _load;
     // The two the onboarding pages point at that nothing else here needed a name for:
     // the score chooser, which the second page's run starts at, and the guide button,
     // which is the whole of the third page's. See Subject.
@@ -1384,7 +1375,10 @@ sealed class JacquardUI
     // The score folder as the chooser has it, and the way to make the chooser say what
     // is in it again.
     List<string> _slots;
-    System.Action _syncSlots;
+    readonly Dictionary<string, Button> _tabButtons = new();
+    float _nextTabRefresh;
+    ScoreDocument _shownDocument;
+    readonly Dictionary<ScoreDocument, Vector2> _documentOffsets = new();
 
     // What the score's controls were last put into, so that they are written to when
     // that changes and not every frame it has not.

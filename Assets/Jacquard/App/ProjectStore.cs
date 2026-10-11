@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.IO;
+using System.Text;
 using UnityEngine;
 
 namespace Jacquard.App {
@@ -10,62 +11,86 @@ namespace Jacquard.App {
 // platform: where the files go, which of them the app comes up in, and what to say
 // when one cannot be read.
 //
-// Every score this app has is a file in one folder, and the chooser is that folder
-// read out. There are no names of its own in here any more: it used to offer "sketch"
-// and three takes as slots to save into, which meant the list held names that were not
-// files and a hand had to know which was which. What it offers now is a folder that is
-// never empty — an install that has saved nothing gets five pieces and nine blank
-// scores written for it — so every name on the chooser is a score, and picking one and
-// pressing Load always does something.
+// Files in the score folder are offered as tabs. Open documents keep their own
+// projects and filenames; the folder never retargets a buffer's Save operation.
+// A fresh install gets the sample pieces and nine scores to work in.
 
 public sealed class ProjectStore
 {
-    // Which file Save and Load are pointed at, which is whatever the chooser is
-    // showing. It is a name and not a path, since the folder is not a choice.
-    public string Name { get; set; } = SlotName(1);
+    // The active file, remembered only after its buffer becomes the displayed one.
+    // Saving receives the document itself, never this mutable remembered name.
+    public string Name { get; private set; } = SlotName(1);
 
     public string Directory
       => Path.Combine(Application.persistentDataPath, "Scores");
 
     public string PathOf(string name)
-      => Path.Combine(Directory, name + ProjectFormat.Extension);
+    {
+        if (string.IsNullOrWhiteSpace(name) || name.IndexOfAny(new[] { '/', '\\' }) >= 0 ||
+            name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 || name == "." || name == "..")
+            throw new System.ArgumentException("A score name must be a filename within the score folder");
+        return Path.Combine(Directory, name + ProjectFormat.Extension);
+    }
 
-    public string Save(Project project)
+    public bool Save(ScoreDocument document, out string message)
     {
         try
         {
-            Write(Name, project);
-            Remember();
-            return "saved " + Name;
+            var text = ProjectFormat.Write(document.Project);
+            System.IO.Directory.CreateDirectory(Directory);
+            var path = PathOf(document.Name);
+            // The file handle covers both the comparison and the write. A new
+            // document uses CreateNew so a file arriving under its name is never
+            // overwritten. An existing one must still hold the text we read.
+            using (var stream = new FileStream(path,
+                document.DiskText == null ? FileMode.CreateNew : FileMode.Open,
+                FileAccess.ReadWrite, FileShare.None))
+            {
+                if (document.DiskText != null)
+                {
+                    using var reader = new StreamReader(stream, Encoding.UTF8, true, 1024, true);
+                    if (reader.ReadToEnd() != document.DiskText)
+                        throw new IOException("The file changed outside Jacquard; your tab has been kept unsaved");
+                }
+                var bytes = new UTF8Encoding(false).GetBytes(text);
+                stream.Position = 0;
+                stream.Write(bytes, 0, bytes.Length);
+                stream.SetLength(bytes.Length);
+                stream.Flush();
+            }
+            document.MarkSaved(text);
+            message = "saved " + document.Name;
+            return true;
         }
         catch (System.Exception error)
         {
             Debug.LogException(error);
-            return "could not save: " + error.Message;
+            message = "could not save " + document.Name + ": " + error.Message;
+            return false;
         }
     }
 
-    public Project Load(out string message)
+    public ScoreDocument Load(string name, out string message)
     {
-        var path = PathOf(Name);
+        var path = PathOf(name);
 
         if (!File.Exists(path))
         {
-            message = "no file called " + Name;
+            message = "no file called " + name;
             return null;
         }
 
         try
         {
-            var project = ProjectFormat.Read(File.ReadAllText(path));
-            Remember();
-            message = "loaded " + Name;
-            return project;
+            var text = File.ReadAllText(path, Encoding.UTF8);
+            var project = ProjectFormat.Read(text);
+            message = "opened " + name;
+            return new ScoreDocument(name, project, text);
         }
         catch (System.Exception error)
         {
             Debug.LogException(error);
-            message = "could not read " + Name + ": " + error.Message;
+            message = "could not read " + name + ": " + error.Message;
             return null;
         }
     }
@@ -193,8 +218,9 @@ public sealed class ProjectStore
     //
     // Written through rather than left for the quit, for the reason the visualizer's
     // setting is: a tablet app is put away and then killed off screen.
-    void Remember()
+    public void Remember(string name)
     {
+        Name = name;
         PlayerPrefs.SetString(LastKey, Name);
         PlayerPrefs.Save();
     }
@@ -204,7 +230,7 @@ public sealed class ProjectStore
     void Write(string name, Project project)
     {
         System.IO.Directory.CreateDirectory(Directory);
-        File.WriteAllText(PathOf(name), ProjectFormat.Write(project));
+        File.WriteAllText(PathOf(name), ProjectFormat.Write(project), new UTF8Encoding(false));
     }
 }
 

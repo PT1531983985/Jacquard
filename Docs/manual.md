@@ -83,9 +83,9 @@ project**; it is remembered for the machine it was set on.
 | Visualizer | Starts **on**. Puts the synth behind the score in a wash the eye can ignore — the output as a trace across the middle, and, while a lane is selected, that channel's own share of it drawn brighter over the top. Selecting any lane of a channel draws the whole channel, since what is traced is the channel and not the lane |
 | Audition | Starts **on**. It is what makes an edit sound the note it just made: a bar let go of, a note written, a stack pasted, a letter pressed on the keyboard. Turned off, all of that goes quiet — but Return still sounds the note under the cursor, since that is a note asked for rather than one volunteered |
 | Buffer size | Reach for this if the sound bangs or drops out: how long a buffer the audio thread has to fill, from 256 frames — 5.3ms at 48kHz — up to 1024. It ships at 512, two stops up from the bottom, because the shortest buffer is one the audio thread has been caught not holding; the bottom stop is still there for a machine that holds it and wants the response back. A longer buffer survives a busy moment and costs that much delay between a Live FX button and what comes out. **On an iPhone or an iPad it ships at 1024, the top of the bar**, and that one is not about speed: a buffer shorter than the system's own breaks the audio track of the screen recorder, so a stop chosen below it here is one to come back up from before recording the screen. **Taken up at the next launch**, which the panel says while the two disagree |
-| Stage Mode | Starts **off**, and is last on the panel, under the settings rather than among them. For playing the app to a room rather than working in it: **Save goes from the row, the `?` goes with the rule in front of it, the Swap group goes from the Channels panel, and a double click on a bar no longer opens a field to type in** — the last of those is a text box that takes the keyboard, and while it has it the keys the plane answers to are going into a number. Nothing the piece is played with is touched: the transport, the tempo, the Live FX buttons, the plane and every bar as a bar all work as they always do, **a double click on a bar's name still takes the number back**, and Load stays, since reaching the next piece is part of playing a set. It is remembered for the machine, so an app put away mid-set and killed off screen comes back still in it — what says so is the gap where Save was |
+| Stage Mode | Starts **off**, and is last on the panel, under the settings rather than among them. For playing the app to a room rather than working in it: **Save goes from the row, the `?` goes with the rule in front of it, the Swap group goes from the Channels panel, and a double click on a bar no longer opens a field to type in** — the last of those is a text box that takes the keyboard, and while it has it the keys the plane answers to are going into a number. Nothing the piece is played with is touched: the transport, the tempo, the Live FX buttons, the plane and every bar as a bar all work as they always do, **a double click on a bar's name still takes the number back**, and file tabs stay, since reaching the next piece is part of playing a set. It is remembered for the machine, so an app put away mid-set and killed off screen comes back still in it — what says so is the gap where Save was |
 | Open score folder | Desktop only — shows the directory the scores are written to |
-| Export / Import | **Android and the browser only**, the two places where the score folder cannot be reached from outside the app at all. Export writes what is on the plane to a file wherever the picker is pointed — in a browser, that is a download; Import reads one back **over the top of what is on the plane**. An imported score is an unsaved score — the score folder is not touched and the chooser still reads whatever it read before, so Load brings that one back. On Android either button shows a picker over the whole screen, which means leaving the app for a moment and stops the sequence; a desktop browser's dialog leaves the app running, so a score imported while the sequence is playing waits for the turn of the piece the way a load does. **In Safari the first download from a site waits for permission**, in a prompt the app cannot see: Export says the score went out, and the file arrives once the prompt is answered |
+| Export / Import | **Android and the browser only**, the two places where the score folder cannot be reached from outside the app at all. Export writes what is on the plane to a file wherever the picker is pointed — in a browser, that is a download; Import reads one back **in a separate unsaved tab**. An imported score is an unsaved score — the score folder is not touched until Save creates a new file for the imported tab. On Android either button shows a picker over the whole screen, which means leaving the app for a moment and stops the sequence; a desktop browser's dialog leaves the app running, so a score imported while the sequence is playing waits for the turn of the piece the way a load does. **In Safari the first download from a site waits for permission**, in a prompt the app cannot see: Export says the score went out, and the file arrives once the prompt is answered |
 | Version | Which build of the app this is, at the foot of the panel. Nothing to set — it is there for saying which copy something happened on |
 
 **On a phone or a tablet, leaving the app stops the sequence.** Nothing about a run
@@ -122,11 +122,17 @@ Scores
 ------
 
 Scores are saved under `Application.persistentDataPath/Scores` as plain text, one line
-per step; pick one with the arrows beside Save and Load. A copy of the app that has saved nothing
+per step; click a file tab to open it. Save writes only the active tab. A copy of the app that has saved nothing
 yet writes fourteen of them for itself — `sample1` through `sample5`, which are pieces
 made in the app, and `score1` through `score9`, which are a bar with a note on each beat
-to work in — so **every name on the chooser is a file that is really there**. It opens in
-whichever was last saved or loaded, and on the very first launch in `sample1`.
+to work in. Each file is offered as a tab. It opens in
+whichever tab was last active, and on the very first launch in `sample1`.
+
+Tabs keep independent edit buffers, cursors and scroll positions for this app session.
+An asterisk marks unsaved changes. Switching back uses the tab buffer rather than
+rereading the file. Save refuses to overwrite an externally changed file or recreate
+a deleted one, and never redirects the tab to another filename. Save each modified
+tab before exiting the app.
 
 The folder can be reached from outside the app: on a desktop through the System panel's
 button, and on iOS in the Files app under On My iPhone (or On My iPad). A file dropped
@@ -139,9 +145,9 @@ to open, so the button is not there.
 the platform's own rule about an app's own directory, and no file manager on it can get
 in; in the browser the folder is a database the page keeps and nothing on the machine can
 be pointed at. What stands in for it, in both, is the **Export** and **Import** pair on
-the System panel: one score out to wherever the picker is pointed, one score back in over
-the top of what is on the plane. An imported score is an unsaved score, so the score
-folder and the chooser are untouched and Load takes the file back.
+the System panel: one score out to wherever the picker is pointed, one score back in
+as a new unsaved `importN` tab. The existing tabs keep their edits. The score folder
+is untouched until Save creates the imported tab's own file.
 
 Whether that costs the sequence depends on the picker. On Android, and in a browser on a
 phone, it takes the whole screen and leaving the app **stops the sequence**. A desktop
@@ -151,10 +157,11 @@ the sequence is running waits for the turn of the piece, exactly as a load does.
 prompt, so Export says the score went out and the file appears once the prompt is
 answered.
 
-**Loading while the sequence is running does not stop it.** The score waits for the turn
+**Switching tabs while the sequence is running does not stop it.** The score waits for the turn
 of the piece and the music carries straight on into it. While it waits, the plane and the
 panel that edits the score are dimmed; the mix and the live effects go on working. A
-request cannot be taken back — Stop is what ends the wait.
+request cannot be taken back — Stop is what ends the wait. Tabs and Save are disabled
+until the incoming tab is displayed; the destination is labelled `(pending)`.
 
 The five samples are checked in at `Assets/Jacquard/Scores/sample1.jacquard.txt` and the
 four beside it. To replace one, save the score from the app and copy the file over it,
