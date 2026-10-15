@@ -49,11 +49,17 @@ static class BuildDesktop
     [MenuItem("Jacquard/Build macOS")]
     public static void BuildMac()
     {
+#if UNITY_EDITOR_OSX
         // Written on every build rather than left to whatever the last build set, since this
         // lives in UserSettings and x64 is what a fresh clone would otherwise build.
         UnityEditor.OSXStandalone.UserBuildSettings.architecture = OSArchitecture.ARM64;
 
         Build(BuildTarget.StandaloneOSX, ScriptingImplementation.IL2CPP, MacOutput);
+#else
+        Debug.LogError("BuildDesktop: the macOS IL2CPP build requires the Unity Editor on macOS.");
+        if (Application.isBatchMode)
+            EditorApplication.Exit(1);
+#endif
     }
 
     [MenuItem("Jacquard/Build Windows")]
