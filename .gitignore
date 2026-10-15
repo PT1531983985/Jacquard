@@ -58,3 +58,8 @@ Desktop.ini
 # out and by the comment that argues for it, so the directory is to hand and out of the
 # history.
 /plans/
+
+# Standalone .NET tooling outputs.
+/Tools/**/bin/
+/Tools/**/obj/
+/.dotnet-home/

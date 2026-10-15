@@ -489,10 +489,16 @@ public sealed class JacquardApp : MonoBehaviour
 
         var document = ui.rootVisualElement;
         _ui = new JacquardUI(document.Q("root") ?? document, this);
+#if UNITY_EDITOR || UNITY_STANDALONE
+        _control = ControlBridge.TryStart(this);
+#endif
     }
 
     void Update()
     {
+#if UNITY_EDITOR || UNITY_STANDALONE
+        _control?.Pump();
+#endif
         // First, because this is what moves the audio clock on a driver that has no
         // audio thread of its own, and everything below reads that clock.
         Synth.Pump();
@@ -589,11 +595,18 @@ public sealed class JacquardApp : MonoBehaviour
 
     void OnDestroy()
     {
+#if UNITY_EDITOR || UNITY_STANDALONE
+        _control?.Dispose();
+#endif
         Synth?.Dispose();
 #if UNITY_EDITOR || UNITY_WEBGL
         if (_panelCopy != null) Destroy(_panelCopy);
 #endif
     }
+
+#if UNITY_EDITOR || UNITY_STANDALONE
+    ControlBridge _control;
+#endif
 
 #if UNITY_EDITOR
 
