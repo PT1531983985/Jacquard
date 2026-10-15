@@ -153,6 +153,8 @@ public sealed class JacquardApp : MonoBehaviour
     public ScoreEditor Editor { get; private set; }
     public ScoreView View { get; private set; }
     public ProjectStore Store { get; private set; }
+    public ScoreDocuments Documents { get; } = new ScoreDocuments();
+    public ScoreDocument PendingDocument { get; private set; }
     public FmSynthStatus Status { get; private set; }
 
     // Whatever the last file operation had to say.
@@ -181,7 +183,12 @@ public sealed class JacquardApp : MonoBehaviour
 
     // Files
 
-    public void Save() => Message = Store.Save(Project);
+    public void Save()
+    {
+        if (Editor.Locked) { Message = "waiting for the tab switch; save after it arrives"; return; }
+        Store.Save(Documents.Active, out var message);
+        Message = message;
+    }
 
     // Opens a score without stopping for it.
     //
@@ -199,26 +206,34 @@ public sealed class JacquardApp : MonoBehaviour
     // A request cannot be taken back, so a second press is not a second request. What
     // is left to a hand that has changed its mind is Stop, which ends the run the
     // switch was waiting on and lets the score in at once.
-    public void Load()
+    public void OpenTab(string name)
     {
         if (Editor.Locked) return;
-
-        var project = Store.Load(out var message);
+        var document = Documents.Find(name);
+        if (document == Documents.Active) return;
+        var message = "tab " + name;
+        if (document == null)
+        {
+            if (!Store.Slots().Contains(name)) { Message = "no file called " + name; return; }
+            document = Store.Load(name, out message);
+            if (document == null) { Message = message; return; }
+            Documents.Add(document);
+        }
+        Documents.Active.Cursor = View.Cursor;
         Message = message;
-
-        if (project != null) BringIn(project, message);
+        BringIn(document, message);
     }
 
     // A score in hand, onto the plane. Everything from the moment there is a project to
     // put in, which is the half a load shares with an import: the two differ only in
     // where the text came from and what there is to say about it.
-    void BringIn(CoreProject project, string message)
+    void BringIn(ScoreDocument document, string message)
     {
         // Before the request, since a score arriving while the transport is stopped
         // lands inside this call and gives the lock straight back.
         Editor.Locked = true;
-
-        Sequencer.SwitchTo(project);
+        PendingDocument = document;
+        Sequencer.SwitchTo(document.Project);
 
         // The file controls have nowhere to say anything but the console, so a load
         // that has not landed says so rather than reading as one that has.
@@ -301,7 +316,17 @@ public sealed class JacquardApp : MonoBehaviour
         var message = "imported " + name;
         Message = message;
 
-        BringIn(project, message);
+        // Imports get their own unsaved buffer, never the current file's identity.
+        var document = new ScoreDocument(UnusedDocumentName("import"), project);
+        Documents.Add(document);
+        if (Editor.Locked)
+        {
+            _deferredImports.Enqueue(document);
+            Message = message + ", waiting for the current tab switch";
+            return;
+        }
+        Documents.Active.Cursor = View.Cursor;
+        BringIn(document, message);
     }
 
     // The sequencer has changed hands. It did so ahead of the clock, by however much of
@@ -323,9 +348,31 @@ public sealed class JacquardApp : MonoBehaviour
         _adoptAt = null;
 
         Project = Sequencer.Project;
+        if (PendingDocument != null)
+        {
+            Documents.Activate(PendingDocument);
+            PendingDocument = null;
+            Store.Remember(Documents.Active.Name);
+        }
         Editor.Adopt(Project);
+        if (!Documents.Active.HasBeenShown)
+            Documents.Active.Cursor = new GridPoint(Project.Score.MinX, Project.Score.MinY);
+        Documents.Active.ShownOnPlane();
+        View.SetCursor(Documents.Active.Cursor);
+        _ui?.RestoreDocumentView();
         Editor.Locked = false;
+        // A picker can return after a different tab has already crossed the
+        // sequencer seam. Keep that imported buffer and switch only after the
+        // current document is adopted, so identities cannot arrive out of order.
+        if (_deferredImports.Count > 0)
+        {
+            var imported = _deferredImports.Dequeue();
+            Documents.Active.Cursor = View.Cursor;
+            Message = "imported " + imported.Name;
+            BringIn(imported, Message);
+        }
     }
+    readonly Queue<ScoreDocument> _deferredImports = new();
 
     // The score the app comes up in, which is a file on disk like every other score
     // this app has ever saved.
@@ -343,12 +390,24 @@ public sealed class JacquardApp : MonoBehaviour
     CoreProject OpeningScore()
     {
         Seed();
-        Store.Name = Store.Opening();
-
-        var project = Store.Load(out var message);
+        var document = Store.Load(Store.Opening(), out var message);
         Message = _sampleProblem ?? message;
+        // A corrupt opening file must not acquire a fresh initial score that a
+        // later Save could silently write over it.
+        document ??= new ScoreDocument(UnusedDocumentName("untitled"), CoreProject.CreateInitial());
+        Documents.Add(document);
+        Documents.Activate(document);
+        Store.Remember(document.Name);
+        return document.Project;
+    }
 
-        return project ?? CoreProject.CreateInitial();
+    string UnusedDocumentName(string prefix)
+    {
+        for (var i = 1; ; i++)
+        {
+            var name = prefix + i;
+            if (Documents.Find(name) == null && !System.IO.File.Exists(Store.PathOf(name))) return name;
+        }
     }
 
     // Filling the score folder, which is the store's business apart from one number:
@@ -489,6 +548,8 @@ public sealed class JacquardApp : MonoBehaviour
 
         var document = ui.rootVisualElement;
         _ui = new JacquardUI(document.Q("root") ?? document, this);
+        Documents.Active.ShownOnPlane();
+        Documents.Active.Cursor = View.Cursor;
 #if UNITY_EDITOR || UNITY_STANDALONE
         _control = ControlBridge.TryStart(this);
 #endif

@@ -32,7 +32,7 @@ public sealed class ControlBridge : IDisposable
 
     [Serializable] sealed class Request
     {
-        public string token, operation, preset;
+        public string token, operation, preset, name;
         public int x, y, x2, y2, channel, note;
         public float value, length;
     }
@@ -41,6 +41,9 @@ public sealed class ControlBridge : IDisposable
         public bool ok;
         public string message, score;
         public bool playing;
+        public string document, pendingDocument;
+        public bool dirty;
+        public string[] tabs;
         public int selected, x, y;
         public string[] presets;
     }
@@ -129,12 +132,20 @@ public sealed class ControlBridge : IDisposable
         if (r == null || !SameToken(r.token, _token)) throw new ArgumentException("Unauthorized control request");
         var editor = _app.Editor;
         var view = _app.View;
-        if (r.operation != "state" && r.operation != "presets" &&
+        if (r.operation != "state" && r.operation != "tabs" && r.operation != "presets" &&
             r.operation != "play" && r.operation != "stop" && editor.Locked)
             throw new InvalidOperationException("Score is locked while a load is pending");
         switch (r.operation)
         {
             case "state": break;
+            case "tabs": break;
+            case "open_tab":
+                if (_app.Documents.Find(r.name) == null && !_app.Store.Slots().Contains(r.name))
+                    throw new ArgumentException("Unknown score tab");
+                _app.OpenTab(r.name);
+                if (_app.Documents.Active.Name != r.name && _app.PendingDocument?.Name != r.name)
+                    throw new InvalidOperationException(_app.Message);
+                break;
             case "presets": break;
             case "play": if (!_app.Sequencer.IsPlaying) _app.TogglePlay(); break;
             case "stop": if (_app.Sequencer.IsPlaying) _app.TogglePlay(); break;
@@ -180,8 +191,20 @@ public sealed class ControlBridge : IDisposable
             score = r.operation == "state" ? ProjectFormat.Write(_app.Project) : null,
             presets = r.operation == "presets" ? new System.Collections.Generic.List<string>(TimbrePresets.Names).ToArray() : null,
             playing = _app.Sequencer.IsPlaying, selected = view.Selection.Count,
+            document = _app.Documents.Active.Name,
+            pendingDocument = _app.PendingDocument?.Name,
+            dirty = _app.Documents.Active.IsDirty,
+            tabs = r.operation == "tabs" ? TabNames() : null,
             x = view.Cursor.X, y = view.Cursor.Y
         };
+    }
+
+    string[] TabNames()
+    {
+        var names = _app.Store.Slots();
+        foreach (var document in _app.Documents.Open)
+            if (!names.Contains(document.Name)) names.Add(document.Name);
+        return names.ToArray();
     }
 
     static void CheckPoint(int x, int y)

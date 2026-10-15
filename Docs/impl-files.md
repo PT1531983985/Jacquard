@@ -67,12 +67,12 @@ synth costs a voice for the session and latches in the effect tails, which are
 recursive. `ProjectFormat.ReadFloat` reads such a token as nothing, and
 `ParamTargets.Set` refuses one from any direction; both argue it where they do it.
 
-The folder is the list
+The folder supplies file tabs
 ----------------------
 
-**Every score is a file in one folder, and the chooser is that folder read out.** There
-are no names of the app's own on it, so every name is a file and pressing Load always does
-something. An install whose folder is empty gets fourteen written for it: the five sample
+**Files in one folder are offered as tabs.** Open documents retain their own edit
+buffers and filenames; selecting a tab cannot retarget another buffer's Save.
+An install whose folder is empty gets fourteen written for it: the five sample
 pieces the build carries as `sample1` through `sample5`, and nine blank scores as `score1`
 through `score9`.
 
@@ -81,12 +81,11 @@ sample there was, which put the only piece worth hearing in the first slot a han
 save over. Named apart, they sort above the slots — so the first launch of all still opens
 a real piece, and nothing done to the nine can destroy one.
 
-The consequence worth remembering is that **the folder is authoritative and the app is
-not**: which score to come up in is remembered in `PlayerPrefs` and checked against the
-folder before it is used, and the folder is read again whenever the app comes back to the
-front — because *away* is exactly where a file manager does its work, and both the System
-panel and iOS file sharing hand somebody that folder on purpose. See `ProjectStore` and
-`IosFileSharing`.
+The folder supplies unopened files and the startup choice. It is read again when
+the app returns to the foreground. Open buffers are retained even if their disk
+files disappear; their filenames cannot be replaced with the first remaining name.
+`PlayerPrefs` remembers the active tab only after it is adopted on the plane.
+See `ProjectStore`, `ScoreDocuments` and `JacquardApp`.
 
 Two platforms where the folder cannot be handed over
 ----------------------------------------------------
@@ -116,13 +115,16 @@ memory to wherever the picker is pointed; Import reads one back over the top of 
 `.androidlib` under `Assets/Plugins/Android` and `JacquardScoreTransfer.jslib` under
 `Assets/Plugins/WebGL`, and each of those argues what its own platform makes of a picker.
 
-**An imported score is an unsaved score.** It goes in through the same seam a load goes
+**An imported score is a separate unsaved tab.** It goes in through the same seam a tab goes
 in through — `JacquardApp.BringIn`, the turn of the piece, the same lock — and nothing
-about it reaches the score folder. `Save` is what decides which slot it ends up in, the
-same as for a score just written, and until then `Load` takes the file on disk back
-unchanged. So the rule above still holds where it is hardest to hold: the folder is
-authoritative, and on both of these it is authoritative over a folder nothing outside the
-app can put a file into.
+about it reaches the score folder. Its `importN` identity is chosen without colliding
+with disk files or open tabs; Save creates that file. Existing buffers stay intact.
+Returning to an open tab uses its buffer rather than rereading its disk file.
+
+**Save takes a document, not a chooser name.** The document holds its project and
+original disk text together. External changes or removal cause a save refusal while
+the buffer remains available. Unreadable startup files produce a separate unsaved
+`untitledN` buffer, never an initial score bound to the unreadable file's name.
 
 **Whether the press stops the sequence is where the two part.** On Android either button
 backgrounds the app, and that is `Sequencer.Stop` by way of

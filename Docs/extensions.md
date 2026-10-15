@@ -1,5 +1,29 @@
 # Editing extensions and MCP control
 
+## File tabs and saving
+
+Click a file tab to open it. Switching tabs keeps each file's edits in its own
+session buffer and restores its cursor and scroll position. An asterisk marks
+unsaved changes. Save and Ctrl/Cmd+S always write the active tab to its own file;
+there is no separate Load button or independent save-target chooser.
+
+While playing, a tab switch waits for the musical loop boundary. The outgoing
+tab stays highlighted and the destination says `(pending)`. Tab switching and
+saving are disabled until the incoming document is displayed. Stop settles the
+switch as before.
+
+Files changed or removed outside Jacquard remain in their open tabs. Save refuses
+to overwrite an externally changed file or recreate a removed one. No tab is
+redirected to another filename. A failed open leaves the current document intact.
+If the startup file cannot be read, an unsaved `untitledN` tab is created instead
+of binding a blank score to that file. Imported scores get their own unsaved
+`importN` tabs; their first Save creates a new file without overwriting another.
+
+Buffers are retained for the current app session, not across app shutdown. Save
+each modified tab before exiting. Switching to an already open tab uses its
+buffer rather than rereading its file from disk. New files in the score folder
+appear when Jacquard returns to the foreground.
+
 ## Tile selection and clipboard
 
 Shift-click selects an inclusive rectangle from the previous cursor cell. Further
@@ -83,15 +107,16 @@ Configure the client using absolute paths and your generated token:
 }
 ```
 
-The tools are `jacquard_state`, `jacquard_presets`, `jacquard_play`,
+The tools are `jacquard_state`, `jacquard_tabs`, `jacquard_open_tab`, `jacquard_presets`, `jacquard_play`,
 `jacquard_stop`, `jacquard_tempo`, `jacquard_preset`, `jacquard_cursor`,
 `jacquard_select`, `jacquard_select_all`, `jacquard_clear_selection`,
 `jacquard_copy`, `jacquard_paste`, `jacquard_delete`, `jacquard_fold`,
 `jacquard_note` and `jacquard_save`. Tools/list supplies their argument schemas.
 Read state before editing: coordinates refer to the current plane, which can
 reframe when edits change its extent. The state tool returns the canonical score
-text, transport state, cursor and selection count. Save writes the selected score
-slot; edits otherwise stay in memory.
+text, transport state, cursor and selection count. Save writes the file belonging
+to the active document; edits otherwise stay in their tab buffers.
+State also includes the active document name, pending document name and dirty flag.
 
 Control requests are dispatched on the Unity main thread. The bridge has a
 five-second queue deadline and the client has an eight-second connection timeout.
@@ -104,6 +129,7 @@ The .NET tooling can be checked without Unity:
 
 ```powershell
 dotnet build Tools/CoreCheck/CoreCheck.csproj
+dotnet build Tools/StoreCheck/StoreCheck.csproj
 dotnet build Tools/Jacquard.Mcp/Jacquard.Mcp.csproj
 dotnet run --project Tools/SyntaxCheck/SyntaxCheck.csproj -- .
 ```
@@ -113,6 +139,8 @@ settings. SyntaxCheck parses all Assets C# files as C# 9 with default, editor,
 standalone desktop, WebGL, Android and iOS symbols. It uses Roslyn bundled with the installed SDK.
 Parsing verifies syntax, not Unity API binding, IL2CPP compatibility, interaction,
 sound or a real MCP session. No Unity build or runtime tests were performed.
+StoreCheck compiles the real store and document model with non-executable stubs
+for Unity's path, preferences and logging APIs. It checks C# binding only.
 
 The sampling instrument request is deferred. It would require a sample store,
 platform-specific import UI, a sampler audio renderer and persistent sample
@@ -123,3 +151,4 @@ Development branches are cumulative: `feature/tile-groups`,
 `feature/timbre-presets`, `feature/mcp-control`, then
 `feature/shortcuts-and-validation`. `feature/jacquard-extensions` contains the
 combined result. All branches use the requested fork as origin.
+The subsequent file-tab changes are on `feature/document-tabs`.

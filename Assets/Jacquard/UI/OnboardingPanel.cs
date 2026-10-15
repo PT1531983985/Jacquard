@@ -403,8 +403,8 @@ sealed class OnboardingPanel
          "Play starts the sequence and stops it again. The bar beside it is the " +
          "tempo — drag it, or double click to type a number."),
         ("Scores",
-         "The arrows at the right of the row pick one of the saved scores, Load " +
-         "opens it and Save writes the piece back to it. Drag the row sideways if it " +
+         "The file tabs open scores and keep each tab's unsaved edits. Save writes " +
+         "only the active tab; * marks unsaved changes. Drag the row sideways if it " +
          "runs off the screen."),
         ("User guide",
          "Everything else — the tiles, the lanes, the sounds a channel is given — is " +
@@ -524,7 +524,9 @@ sealed class OnboardingPanel
         // not in the style, and Pages for why the words themselves carry no markup.
         _body.text = $"<line-height={LineHeight}%>{page.Body}";
 
-        Picture(_page < _pages?.Length ? _pages[_page] : null);
+        // The bundled score-controls crop still shows the former chooser and
+        // Load button. Omit it until captures are regenerated for the file tabs.
+        Picture(_page != 1 && _page < _pages?.Length ? _pages[_page] : null);
 
         _count.text = $"{_page + 1} of {Pages.Length}";
         _next.text = _page + 1 < Pages.Length ? "Next" : "Done";

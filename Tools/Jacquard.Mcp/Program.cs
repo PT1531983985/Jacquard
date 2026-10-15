@@ -160,6 +160,8 @@ static class Catalog
         var tools = new[]
         {
             new Tool("state", "Read the current score text, playing state, cursor and selection count.", true, []),
+            new Tool("tabs", "List score tabs and read the active and pending document names.", true, []),
+            new Tool("open_tab", "Open a score tab by name, retaining unsaved edits in other tabs. While playing the switch waits for the loop boundary.", false, [new("name", "string")]),
             new Tool("presets", "List available FM timbre presets.", true, []),
             new Tool("play", "Start playback if stopped.", false, []),
             new Tool("stop", "Stop playback if playing.", false, []),
@@ -177,7 +179,7 @@ static class Catalog
             new Tool("fold", "Toggle folding of the cursor stack in the view; playback stays unchanged.", false, []),
             new Tool("note", "Append a MIDI note to an empty cell or stack bottom, extending at a terminator if possible. Length is in lane steps.", false,
                 [X("x"), X("y"), new("note", "integer", 0, 127), new("length", "number", 0.001, 64)]),
-            new Tool("save", "Save the current project to the currently selected score slot.", false, [])
+            new Tool("save", "Save the active document to its own file. Refuses saves while a tab switch is pending or when the file changed outside Jacquard.", false, [])
         };
         return tools.ToDictionary(t => "jacquard_" + t.Operation);
     }
