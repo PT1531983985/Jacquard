@@ -59,6 +59,53 @@ public sealed class ScoreView : VisualElement
 
     public GridPoint Cursor { get; private set; } = new GridPoint(1, 1);
 
+    public HashSet<Tile> Selection { get; } = new();
+    readonly HashSet<Tile> _collapsed = new();
+    GridPoint? _selectionAnchor;
+
+    public void SelectAll()
+    {
+        Selection.Clear();
+        foreach (var lane in Score.Lanes)
+            foreach (var step in lane.Steps)
+                foreach (var tile in step.Tiles) Selection.Add(tile);
+        _upper.MarkDirtyRepaint();
+    }
+
+    public void ClearSelection()
+    {
+        Selection.Clear();
+        _selectionAnchor = null;
+        _upper.MarkDirtyRepaint();
+    }
+
+    public void SelectRectangle(GridPoint from, GridPoint to)
+    {
+        Selection.Clear();
+        foreach (var lane in Score.Lanes)
+            for (var i = 0; i < lane.Steps.Count; i++)
+                for (var d = 0; d < lane.Steps[i].Depth; d++)
+                {
+                    var p = lane.CellPoint(i, d);
+                    if (p.X >= Math.Min(from.X, to.X) && p.X <= Math.Max(from.X, to.X) &&
+                        p.Y >= Math.Min(from.Y, to.Y) && p.Y <= Math.Max(from.Y, to.Y))
+                        Selection.Add(lane.Steps[i].Tiles[d]);
+                }
+        _upper.MarkDirtyRepaint();
+    }
+
+    // Folding changes the view only: playback, file coordinates and the space a
+    // stack owns stay intact. The top tile tells how many cells it is hiding.
+    public void ToggleStack()
+    {
+        var cell = Score.At(Cursor);
+        if (cell.Kind != CellKind.Tile) return;
+        var top = cell.Lane.Steps[cell.Step].Tiles[0];
+        if (!_collapsed.Remove(top)) _collapsed.Add(top);
+        SetCursor(cell.Lane.CellPoint(cell.Step, 0));
+        Rebuild();
+    }
+
     public event Action CursorMoved;
     public event Action<KeyDownEvent> KeyPressed;
 
@@ -138,6 +185,10 @@ public sealed class ScoreView : VisualElement
         EndDrag();
         EndFlash();
 
+        if (_arrived) { ClearSelection(); _collapsed.Clear(); }
+        Selection.RemoveWhere(tile => !Score.Locate(tile).HasValue);
+        _collapsed.RemoveWhere(tile => !Score.Locate(tile).HasValue);
+
         // Before the resize, which reads the positions this may have moved, and before
         // the cells, which are placed from where it leaves the score.
         Reframe();
@@ -177,7 +228,12 @@ public sealed class ScoreView : VisualElement
             {
                 var step = lane.Steps[i];
                 for (var d = 0; d < step.Depth; d++)
+                {
+                    if (d > 0 && _collapsed.Contains(step.Tiles[0])) continue;
                     Place(ref count, step.Tiles[d], lane.CellPoint(i, d));
+                    _tiles[count - 1].tooltip = d == 0 && _collapsed.Contains(step.Tiles[0])
+                        ? $"{step.Depth} tiles (Tab to expand)" : "";
+                }
             }
         }
 
@@ -493,6 +549,14 @@ public sealed class ScoreView : VisualElement
 
         DrawDropCells(painter);
         DrawFlashCells(painter);
+        painter.strokeColor = Style.Cursor;
+        painter.BeginPath();
+        foreach (var tile in Selection)
+        {
+            var point = Score.Locate(tile);
+            if (point.HasValue) RoundedRect(painter, Style.CellRect(point.Value), Style.Radius);
+        }
+        painter.Stroke();
     }
 
     // The cells a drag would land on, filled faintly and outlined. There is no
@@ -571,7 +635,27 @@ public sealed class ScoreView : VisualElement
         Focus();
 
         var point = Style.CellAt(evt.localPosition);
+        var previous = Cursor;
         SetCursor(point);
+
+        if (evt.shiftKey)
+        {
+            _selectionAnchor ??= previous;
+            SelectRectangle(_selectionAnchor.Value, point);
+            evt.StopPropagation();
+            return;
+        }
+        // Control is reserved for panning by ScrollArea; Alt-click is the
+        // additive selection gesture and therefore never starts a tile drag.
+        if (evt.altKey)
+        {
+            var tile = Score.At(point).Tile;
+            if (tile != null && !Selection.Remove(tile)) Selection.Add(tile);
+            _upper.MarkDirtyRepaint();
+            evt.StopPropagation();
+            return;
+        }
+        ClearSelection();
 
         // Double click detection of its own, rather than the event's clickCount, which
         // counts presses by the clock alone. A press here, one on the cell beside it and
