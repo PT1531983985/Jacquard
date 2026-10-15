@@ -19,8 +19,8 @@ public enum TileKind
 
 // Editing operations, one place for every change the user can make to a score.
 //
-// The cursor is also the selection: there is no separate notion of a selected
-// tile, so what the detail panel shows is whatever the cursor is standing on.
+// The cursor drives the detail panel. A separate view selection identifies
+// tiles for bulk edits without changing which tile the panel describes.
 //
 // A tile goes down on free ground only, which is what the panel offers one on. A
 // stack is therefore written from the top down — the gate first, the note it
@@ -217,6 +217,7 @@ public sealed class ScoreEditor
     {
         _groupCopy = false;
         _copiedCells.Clear();
+        _copied = null;
 
         var copies = Score.CopyStack(View.Cursor, _copiedCells);
         if (copies == null) return;
@@ -467,7 +468,7 @@ public sealed class ScoreEditor
 
     // Keyboard
 
-    // What is left to the keys is moving about, deleting, and asking to hear what is
+    // The keys move about, select, copy, paste, fold, delete and ask to hear what is
     // under the cursor. Every pitch is the panel's — the letter on its keyboard, the
     // register on the bar under it — so that there is one way of arriving at a note
     // and it is the one on screen.
@@ -487,7 +488,7 @@ public sealed class ScoreEditor
                 case KeyCode.V: PasteSelection(); return true;
             }
         }
-        if (evt.keyCode == KeyCode.Escape) { View.ClearSelection(); return true; }
+        if (evt.keyCode == KeyCode.Escape) { _keyAnchor = null; View.ClearSelection(); return true; }
         if (evt.keyCode == KeyCode.Tab) { View.ToggleStack(); return true; }
         if (evt.shiftKey && (evt.keyCode == KeyCode.LeftArrow ||
             evt.keyCode == KeyCode.RightArrow || evt.keyCode == KeyCode.UpArrow ||

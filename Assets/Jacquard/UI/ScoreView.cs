@@ -138,6 +138,9 @@ public sealed class ScoreView : VisualElement
         _tiles = new VisualElement { pickingMode = PickingMode.Ignore };
         _tiles.StretchToParentSize();
         Add(_tiles);
+        _foldMarks = new VisualElement { pickingMode = PickingMode.Ignore };
+        _foldMarks.StretchToParentSize();
+        Add(_foldMarks);
         _upper = AddLayer(DrawUpper);
 
         // What is in hand rides above everything, including the cursor: it is the
@@ -217,6 +220,7 @@ public sealed class ScoreView : VisualElement
         // the middle and a score arriving do shift the walk, and those two redraw about
         // as much as this used to; the arriving score is a dimmed plane anyway.
         var count = 0;
+        _foldMarks.Clear();
 
         foreach (var lane in Score.Lanes)
         {
@@ -233,6 +237,17 @@ public sealed class ScoreView : VisualElement
                     Place(ref count, step.Tiles[d], lane.CellPoint(i, d));
                     _tiles[count - 1].tooltip = d == 0 && _collapsed.Contains(step.Tiles[0])
                         ? $"{step.Depth} tiles (Tab to expand)" : "";
+                    if (d == 0 && step.Depth > 1 && _collapsed.Contains(step.Tiles[0]))
+                    {
+                        var origin = Style.CellOrigin(lane.CellPoint(i, 0));
+                        var mark = new Label("+" + (step.Depth - 1)) { pickingMode = PickingMode.Ignore };
+                        mark.style.position = Position.Absolute;
+                        mark.style.left = origin.x + Style.CellWidth - 17;
+                        mark.style.top = origin.y + Style.CellHeight - 13;
+                        mark.style.fontSize = 9;
+                        mark.style.color = Style.Cursor;
+                        _foldMarks.Add(mark);
+                    }
                 }
             }
         }
@@ -850,6 +865,7 @@ public sealed class ScoreView : VisualElement
     // Private members
 
     readonly VisualElement _tiles;
+    readonly VisualElement _foldMarks;
     readonly VisualElement _ghosts;
     readonly PaintLayer _lower;
     readonly PaintLayer _upper;

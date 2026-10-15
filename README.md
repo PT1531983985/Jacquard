@@ -2,6 +2,9 @@
 
 # Jacquard
 
+Additional tile editing, FM presets and desktop MCP control are documented in
+[Editing extensions and MCP control](Docs/extensions.md).
+
 Jacquard is an experimental tile-based music sequencer built with Unity.
 
 Instead of arranging notes on conventional tracks, Jacquard lets you build
