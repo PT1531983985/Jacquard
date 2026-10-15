@@ -44,6 +44,8 @@ How it is built
 How it ships
 ------------
 
+Local Editor and CLI builds: [building.md](building.md) (Japanese).
+
 | | |
 | --- | --- |
 | [releasing.md] | The procedure for putting a build in front of people, and what is agreed with somebody rather than run |
