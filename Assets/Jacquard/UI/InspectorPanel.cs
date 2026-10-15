@@ -382,6 +382,15 @@ sealed class InspectorPanel
 
         _sound = new VisualElement();
 
+        _sound.Add(Controls.Heading("Presets", follows: true));
+        foreach (var name in TimbrePresets.Names)
+            _sound.Add(Controls.Push(name, () =>
+            {
+                Patch() = TimbrePresets.Create(name);
+                ValueBar.SyncAll(_sound);
+                Audition();
+            }));
+
         // Every bar sounds a note on the channel once its value has settled, which is
         // the whole of the auditioning: a drag down a bar is one note rather than a
         // burst of them, and a parameter is heard where it was left. There is no button
@@ -391,7 +400,7 @@ sealed class InspectorPanel
         // And every name is double clicked to put its parameter back where a fresh patch
         // holds it, which is the same gesture that lets a lock go of its target: a row
         // taken back to saying nothing of its own. A whole patch cannot be reset in one
-        // press, and deliberately — a sound is arrived at one parameter at a time, and
+        // parameter reset; the preset buttons above replace the entire sound. A sound is arrived at one parameter at a time, and
         // the way back from a dead end is the parameter that was last touched rather
         // than everything that came before it.
         for (var target = 0; target < ParamTargets.Count; target++)
